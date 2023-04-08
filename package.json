@@ -18,7 +18,9 @@
     "typescript": "^5.0.4"
   },
   "dependencies": {
+    "chalk": "^5.2.0",
     "dotenv": "^16.0.3",
+    "fastq": "^1.15.0",
     "file-type": "^18.2.1"
   }
 }
