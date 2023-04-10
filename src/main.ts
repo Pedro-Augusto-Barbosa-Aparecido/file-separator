@@ -1,18 +1,23 @@
 import fs from "node:fs";
 
-import chalk from "chalk";
 import { config } from "dotenv";
 
 import { joinDirs } from "./utils/join";
 import { queue } from "./lib/Queue";
 import { WorkerResponse } from "./lib/Worker";
 
+import dayjs from "dayjs";
+
 config();
 
 const sourceDirectory = process.env.DEFAULT_PATH_TO_WORK!;
-const fileType = "image";
+const fileType = "video";
 
-const destinDirectory = joinDirs(sourceDirectory, "results", fileType);
+const destinDirectory = joinDirs(
+  `../output-${process.pid}`,
+  "results",
+  fileType
+);
 
 if (!fs.existsSync(destinDirectory)) {
   fs.mkdirSync(destinDirectory, {
@@ -20,10 +25,14 @@ if (!fs.existsSync(destinDirectory)) {
   });
 }
 
-const paths = fs.readdirSync(sourceDirectory);
+const startTime = new Date().getTime();
 
-async function populateQueue() {
-  paths.forEach(async (folder) => {
+const paths = fs.readdirSync(sourceDirectory);
+const totalOfFolder = paths.length;
+let quantityOfFolderChecked = 0;
+
+function populateQueue() {
+  paths.forEach((folder) => {
     queue
       .push({
         destinDirectory,
@@ -32,22 +41,33 @@ async function populateQueue() {
       })
       .then(
         ({ quantityOfFileInFolder, quantityOfFileMoved }: WorkerResponse) => {
-          console.log("Entrou");
-          chalk.green(
-            `Moved images of ${sourceDirectory} to ${destinDirectory}`
+          console.log(
+            `Moved ${fileType}s of ${joinDirs(
+              sourceDirectory,
+              folder
+            )} to ${destinDirectory}`
           );
-          chalk.greenBright(
+          console.log(
             `Moved: ${quantityOfFileMoved} | HasOnFolder: ${quantityOfFileInFolder}`
+          );
+
+          console.log(
+            `Total of folder to check: ${totalOfFolder} | Total of checked folder: ${++quantityOfFolderChecked} | Still missing: ${
+              totalOfFolder - quantityOfFolderChecked
+            }`
           );
         }
       )
       .catch((error) => {
-        chalk.redBright(error);
+        console.log(error);
       })
       .finally(() => {
-        chalk.white("Finish process");
+        const endTime = new Date().getTime();
+
+        const coustTime = dayjs(endTime - startTime).get("milliseconds");
+        console.log(`Coust time: ${coustTime} milliseconds`);
       });
   });
 }
 
-populateQueue().then(() => {});
+populateQueue();

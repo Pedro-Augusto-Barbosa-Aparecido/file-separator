@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { QueueTask } from "./Queue";
-import { fileTypeFromFile, FileTypeResult } from "file-type";
+import { fileTypeFromFile } from "file-type";
 import { joinDirs } from "../utils/join";
 
 export type WorkerResponse = {
@@ -22,52 +22,47 @@ export async function worker({
   const files = fs.readdirSync(directory, { encoding: "utf-8" });
   const workerId = randomUUID();
 
-  const fileTypes = [] as Array<FileTypeResult | undefined>;
   const quantityOfFileOnFolder = files.length;
 
-  for await (const file of files) {
-    fileTypes.push(await fileTypeFromFile(file));
-  }
+  let quantityOfFileMoved = 0;
 
-  return new Promise<WorkerResponse>((resolve, reject) => {
-    let quantityOfFileMoved = 0;
+  for (const file of files) {
+    try {
+      const filepath = joinDirs(directory, file);
+      const fileType = await fileTypeFromFile(filepath);
 
-    files.forEach((file, index) => {
-      try {
-        const filepath = path.resolve(path.join(directory, file));
-        const fileType = fileTypes.at(index);
-
-        if (!fileType?.mime.includes(typeOfFile)) {
-          return;
-        }
-
+      if (fileType?.mime.includes(typeOfFile)) {
         const extname = path.extname(filepath);
         const filename = path.basename(filepath, extname);
 
-        const readStream = fs.createReadStream(filepath, { encoding: "utf-8" });
+        const readStream = fs.createReadStream(filepath);
 
         const writeStream = fs.createWriteStream(
-          joinDirs(destinDirectory, `${filename}__${workerId}.${extname}`),
-          { encoding: "utf-8" }
+          joinDirs(
+            destinDirectory,
+            `${filename}__${workerId}${extname}`
+          ).replace("..", ".")
         );
 
-        readStream.on("data", (chunk) => writeStream.write(chunk));
-        readStream.on("close", () => {
+        console.log(`Moving file ${filename}.${extname}`);
+
+        readStream.pipe(writeStream);
+        readStream.on("complete", () => {
           console.log(`File "${filename}.${extname}" was finished in process`);
           quantityOfFileMoved++;
         });
 
         readStream.on("error", console.log);
         writeStream.on("error", console.log);
-      } catch (error) {
-        console.log(error);
       }
-    });
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
-    resolve({
-      newPath: destinDirectory,
-      quantityOfFileInFolder: quantityOfFileOnFolder,
-      quantityOfFileMoved,
-    });
-  });
+  return {
+    newPath: destinDirectory,
+    quantityOfFileInFolder: quantityOfFileOnFolder,
+    quantityOfFileMoved,
+  };
 }
